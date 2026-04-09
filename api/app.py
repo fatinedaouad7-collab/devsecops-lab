@@ -3,10 +3,11 @@ import sqlite3
 import subprocess
 import hashlib
 import os
+import bcrypt
 
 app = Flask(__name__)
 
-SECRET_KEY = "dev-secret-key-12345"  
+SECRET_KEY = os.getenv("SECRET_KEY", "secure-key")
 
 
 @app.route("/login", methods=["POST"])
@@ -17,9 +18,9 @@ def login():
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
 
-    # Vulnerable SQL Injection
-    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-    cursor.execute(query)
+    # SECURE QUERY (no SQL injection)
+    query = "SELECT * FROM users WHERE username=? AND password=?"
+    cursor.execute(query, (username, password))
 
     result = cursor.fetchone()
 
@@ -33,57 +34,41 @@ def login():
 def ping():
     host = request.json.get("host", "")
 
-    # Command Injection vulnerability
-    cmd = f"ping -c 1 {host}"
-    output = subprocess.check_output(cmd, shell=True)
-
-    return {"output": output.decode()}
+    # SECURE (no shell=True)
+    try:
+        output = subprocess.check_output(["ping", "-c", "1", host])
+        return {"output": output.decode()}
+    except:
+        return {"error": "Invalid host"}
 
 
 @app.route("/compute", methods=["POST"])
 def compute():
-    expression = request.json.get("expression", "1+1")
-
-    # CRITICAL vulnerability (eval)
-    result = eval(expression)
-
-    return {"result": result}
+    return {"message": "Function disabled for security reasons"}
 
 
 @app.route("/hash", methods=["POST"])
 def hash_password():
     pwd = request.json.get("password", "admin")
 
-    # Weak hashing (MD5)
-    hashed = hashlib.md5(pwd.encode()).hexdigest()
+    hashed = bcrypt.hashpw(pwd.encode(), bcrypt.gensalt())
 
-    return {"md5": hashed}
+    return {"bcrypt": hashed.decode()}
 
 
 @app.route("/readfile", methods=["POST"])
 def readfile():
-    filename = request.json.get("filename", "test.txt")
-
-    # File read vulnerability
-    with open(filename, "r") as f:
-        content = f.read()
-
-    return {"content": content}
+    return {"message": "Access denied for security reasons"}
 
 
 @app.route("/debug", methods=["GET"])
 def debug():
-    # Sensitive info exposed
-    return {
-        "debug": True,
-        "secret_key": SECRET_KEY,
-        "environment": dict(os.environ)
-    }
+    return {"message": "Debug disabled"}
 
 
 @app.route("/hello", methods=["GET"])
 def hello():
-    return {"message": "Welcome to the DevSecOps vulnerable API"}
+    return {"message": "Secure API running"}
 
 
 if __name__ == "__main__":
